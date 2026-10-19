@@ -3,7 +3,7 @@ name: Answer hourly quiz
 on:
   schedule:
     # Every 5 minutes, offset from the top of the hour (minutes 2, 7, ..., 57).
-    - cron: "2-57/5 * * * *"
+    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
   workflow_dispatch:
 
 permissions:
