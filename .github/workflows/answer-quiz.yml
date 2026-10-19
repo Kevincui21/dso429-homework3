@@ -1,0 +1,51 @@
+name: Answer hourly quiz
+
+on:
+  schedule:
+    # Every 5 minutes, offset from the top of the hour (minutes 2, 7, ..., 57).
+    - cron: "2-57/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write   # commit answer files to main
+  actions: write    # let the job disable this workflow once the assignment is over
+
+# Only one run at a time; a queued run waits instead of racing the current one.
+concurrency:
+  group: answer-quiz
+  cancel-in-progress: false
+
+jobs:
+  answer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Stop after the assignment ends
+        id: window
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Round 168: Thu 22 Oct 2026 20:00 UTC (1 PM PDT); due 21:00 UTC. Stop at 23 Oct 00:00 UTC.
+          if [ "$(date -u +%s)" -ge "$(date -u -d '2026-10-23T00:00:00Z' +%s)" ]; then
+            echo "Assignment is over; disabling this workflow."
+            gh workflow disable answer-quiz.yml --repo "$GITHUB_REPOSITORY" || true
+            echo "active=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "active=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.window.outputs.active == 'true'
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Configure git identity
+        if: steps.window.outputs.active == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Answer all unanswered rounds and push
+        if: steps.window.outputs.active == 'true'
+        run: python3 run.py

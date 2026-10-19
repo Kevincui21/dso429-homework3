@@ -3,7 +3,7 @@ import csv
 import io
 import urllib.request
 
-from solver import solve
+from solver import UnsolvableQuestion, solve
 
 BASE = "https://raw.githubusercontent.com/FaisalXL/dso429-hourly-quiz/main/"
 
@@ -21,11 +21,14 @@ for row in fetch_csv("questions.csv"):
     if key not in keys:
         continue
     opts = [row[f"option_{c}"] for c in "abcd"]
-    letter, method = solve(row["question_text"], opts)
-    methods[method] = methods.get(method, 0) + 1
+    try:
+        letter = solve(row["question_text"], opts)
+    except UnsolvableQuestion as e:
+        letter = None
+        methods["unsolvable"] = methods.get("unsolvable", 0) + 1
     total += 1
     if letter == keys[key]:
         right += 1
     else:
         print("WRONG", key, row["question_text"], opts, "got", letter, "want", keys[key])
-print(f"Practice accuracy: {right}/{total} = {right / total:.2%}   methods: {methods}")
+print(f"Practice accuracy: {right}/{total} = {right / total:.2%}   unsolvable: {methods.get('unsolvable', 0)}")

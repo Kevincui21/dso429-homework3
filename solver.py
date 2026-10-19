@@ -2,13 +2,9 @@
 
 Each question template is recognised with a regex, the answer is computed
 exactly, and the option whose value is closest to the computed answer wins.
-Unknown templates fall back to an LLM via OpenRouter (if a key is set).
+Unknown templates raise UnsolvableQuestion instead of guessing; no paid API is used.
 """
-import json
-import math
-import os
 import re
-import urllib.request
 from datetime import datetime, timedelta
 
 NUM = r"\$?(-?[\d,]+(?:\.\d+)?)"
@@ -39,7 +35,11 @@ def pick(target, options):
         d = abs((v - target).days) if isinstance(target, datetime) else abs(v - target)
         if best_d is None or d < best_d:
             best, best_d = letter, d
-    return best
+    if best_d is None:
+        return None
+    # The computed answer must essentially equal an option (options are rounded to 0.1 or 0.01).
+    tolerance = 0 if isinstance(target, datetime) else max(0.06, abs(target) * 0.001)
+    return best if best_d <= tolerance else None
 
 
 def compute(q):
@@ -57,7 +57,7 @@ def compute(q):
     m = re.search(r"Fixed costs are " + NUM + r"\. Each unit sells for " + NUM + r" with a variable cost of " + NUM, q)
     if m:
         f, p, v = num(m.group(1)), num(m.group(2)), num(m.group(3))
-        return f / (p - v)
+        return float(round(f / (p - v)))  # "to the nearest unit"
     m = re.search(r"listed at " + NUM + r" is discounted by ([\d.]+)%", q)
     if m:
         return num(m.group(1)) * (1 - float(m.group(2)) / 100)
@@ -102,34 +102,16 @@ def compute(q):
     return None
 
 
-def ask_llm(q, options):
-    key = os.environ.get("OPENROUTER_API_KEY")
-    if not key:
-        return None
-    prompt = (q + "\n" + "\n".join(f"{l}) {o}" for l, o in zip("ABCD", options))
-              + "\nWork it out carefully, then reply with only the single letter of the correct option.")
-    body = json.dumps({"model": "openai/gpt-4.1-mini", "temperature": 0,
-                       "messages": [{"role": "user", "content": prompt}]}).encode()
-    req = urllib.request.Request("https://openrouter.ai/api/v1/chat/completions", data=body,
-                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            text = json.load(r)["choices"][0]["message"]["content"]
-        letters = re.findall(r"\b([ABCD])\b", text)
-        return letters[-1] if letters else None
-    except Exception as e:
-        print(f"  LLM fallback failed: {e}")
-        return None
+class UnsolvableQuestion(Exception):
+    """Raised when a question does not match any known template."""
 
 
 def solve(q, options):
-    """Return (letter, method). Always returns a valid letter."""
+    """Return the letter of the correct option, or raise UnsolvableQuestion."""
     target = compute(q)
-    if target is not None:
-        letter = pick(target, options)
-        if letter:
-            return letter, "calc"
-    letter = ask_llm(q, options)
-    if letter:
-        return letter, "llm"
-    return "A", "guess"
+    if target is None:
+        raise UnsolvableQuestion(f"unknown question template: {q!r}")
+    letter = pick(target, options)
+    if letter is None:
+        raise UnsolvableQuestion(f"no option matches computed answer {target!r}: {q!r} {options}")
+    return letter
