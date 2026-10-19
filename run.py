@@ -36,7 +36,7 @@ STOP_AT = datetime(2026, 10, 23, 0, 0, tzinfo=timezone.utc)
 IN_CI = os.environ.get("GITHUB_ACTIONS") == "true"
 # The local Mac job is only a backup: it leaves fresh rounds to GitHub Actions
 # and only steps in if a round is still unanswered this long after release.
-MIN_AGE = timedelta(0) if IN_CI else timedelta(minutes=int(os.environ.get("BACKUP_DELAY_MIN", "90")))
+MIN_AGE = timedelta(0) if IN_CI else timedelta(minutes=int(os.environ.get("BACKUP_DELAY_MIN", "40")))
 
 
 def log(msg):
