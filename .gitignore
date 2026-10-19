@@ -1,0 +1,7 @@
+.env
+*.log
+logs/
+__pycache__/
+usage_reports/
+*.jsonl
+.DS_Store
