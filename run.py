@@ -83,6 +83,10 @@ def push_with_retry(attempts=5):
 
 
 def main():
+    # Round 168 is released 2026-10-22 20:00 UTC; nothing new can appear after the deadline.
+    if datetime.now(timezone.utc) > datetime(2026, 10, 22, 22, 0, tzinfo=timezone.utc):
+        log("assignment is over, nothing to do")
+        return
     git("checkout", "main", check=False)
     git("pull", "--rebase", "origin", "main", check=False)
     rounds = fetch_questions()
